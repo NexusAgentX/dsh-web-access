@@ -1,6 +1,6 @@
 {
   "name": "dsh-web-access",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Web access for DeepSeek Harness — multi-provider search/fetch on ctx.web, plus GitHub/PDF/YouTube extraction.",
   "type": "module",
   "main": "./dist/index.js",
@@ -74,7 +74,7 @@
   },
   "dependencies": {
     "@mozilla/readability": "^0.6.0",
-    "linkedom": "^0.16.0",
+    "linkedom": "0.16.11",
     "p-limit": "^6.1.0",
     "promise.try": "^2.0.1",
     "turndown": "^7.2.0",

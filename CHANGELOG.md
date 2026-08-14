@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-08-14
+
+### Fixed
+
+- Pin `linkedom` to `0.16.11`. `^0.16.0` could install `0.16.0`, whose ESM import of `cdata-section` lacks a `.js` suffix and crashes Node 24 when the plugin loads.
+
 ## [0.2.0] - 2026-08-14
 
 ### Added
