@@ -50,7 +50,11 @@ export function apply(ctx: Context, config: Config = {}): void {
     void bindHarnessLlm(ctx, engine)
   }), 'dsh-web-access.config')
   void bindHarnessLlm(ctx, engine)
-  registerWebUi(ctx, engine)
+  // webServer is host-plane and may be absent on tui/headless. Wait for it
+  // instead of requiring it in static inject, otherwise tools never load.
+  ctx.inject(['webServer'], ui => {
+    registerWebUi(ui, engine)
+  })
 
   if (isToolEnabled(fileConfig, 'webSearch')) {
     const official = ctx.tools.get(engine.names.webSearch)

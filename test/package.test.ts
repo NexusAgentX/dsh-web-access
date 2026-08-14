@@ -15,6 +15,8 @@ describe('dsh-web-access package', () => {
     assert.equal(pkg.name, 'dsh-web-access')
     assert.equal(name, 'dsh-web-access')
     assert.deepEqual(inject, ['tools', 'web'])
+    const plugin = readFileSync(join(root, '..', 'src/plugin.ts'), 'utf8')
+    assert.match(plugin, /ctx\.inject\(\['webServer'\]/)
   })
 
   it('retrieves stored search results', () => {

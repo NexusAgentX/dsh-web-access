@@ -12,8 +12,8 @@ interface WebServer {
 }
 
 export function registerWebUi(ctx: Context, engine: Engine): void {
-  const server = ctx.get('webServer') as WebServer | undefined
-  if (!server) return
+  const server = ((ctx as Context & { webServer?: WebServer }).webServer ?? ctx.get('webServer')) as WebServer | undefined
+  if (!server?.register) return
 
   const port = typeof server.port === 'number' && server.port > 0 ? server.port : 3080
   setCuratorPublicOrigin(`http://127.0.0.1:${port}`)
