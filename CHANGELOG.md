@@ -7,13 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-
-- Session-scoped search/fetch cache that restores from disk when the same dsh session comes back.
-- Saving keys in the Web UI invalidates provider caches so new credentials work without restart.
-- Curator now mounts at `/dsh-web-access/curator` on the dsh web server (same origin, no extra port).
-- Ships a `dsh.client` bundle that registers the overlay into `shell.overlay`.
-
 ## [0.2.0] - 2026-08-14
 
 ### Added
@@ -24,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Background `includeContent` completion injects a plugin notice into the agent.
 - Image/video frames are saved through `ctx.attachments` when available.
 - Summary/answer generation uses `ctx.llm` when a harness model is configured.
+- Session-scoped search/fetch cache that restores from disk when the same dsh session comes back.
+- Saving keys in the Web UI invalidates provider caches so new credentials work without restart.
+- Curator now mounts at `/dsh-web-access/curator` on the dsh web server (same origin, no extra port).
+- Ships a `dsh.client` bundle that registers the overlay into `shell.overlay`.
 
 ## [0.1.0] - 2026-08-14
 
