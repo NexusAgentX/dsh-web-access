@@ -1,25 +1,23 @@
 {
   "name": "dsh-web-access",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Web access for DeepSeek Harness — multi-provider search/fetch on ctx.web, plus GitHub/PDF/YouTube extraction.",
   "type": "module",
-  "main": "./index.js",
-  "types": "./index.d.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./index.d.ts",
-      "import": "./index.js",
-      "default": "./index.js"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
     },
     "./package.json": "./package.json"
   },
   "bin": {
-    "dsh-web-access": "./cli.js"
+    "dsh-web-access": "./dist/cli.js"
   },
   "files": [
-    "index.js",
-    "index.d.ts",
-    "cli.js",
+    "dist",
     "cordis.patch.yml",
     "README.md",
     "LICENSE",
@@ -31,8 +29,10 @@
     }
   },
   "scripts": {
-    "test": "node --test test/*.test.js",
-    "prepack": "node --test test/*.test.js"
+    "build": "tsc -p tsconfig.json && chmod +x dist/cli.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "NODE_OPTIONS='--experimental-strip-types --no-warnings' node --experimental-strip-types --test test/*.test.ts test/*.test.mjs",
+    "prepack": "npm run build && npm test"
   },
   "engines": {
     "node": ">=20"
@@ -61,5 +61,40 @@
   "homepage": "https://github.com/NexusAgentX/dsh-web-access#readme",
   "publishConfig": {
     "access": "public"
+  },
+  "dependencies": {
+    "@mozilla/readability": "^0.6.0",
+    "linkedom": "^0.16.0",
+    "p-limit": "^6.1.0",
+    "promise.try": "^2.0.1",
+    "turndown": "^7.2.0",
+    "unpdf": "^1.6.2",
+    "undici": "^8.9.0"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-commands": "^0.0.1-rc.1",
+    "@deepseek-ai/dsh-tools": "^0.0.1-rc.1",
+    "@deepseek-ai/dsh-web": "^0.0.1-rc.1",
+    "@deepseek-ai/schemastery": "^3.18.1"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/dsh-commands": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-web": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-commands": "^0.0.1-rc.1",
+    "@deepseek-ai/dsh-tools": "^0.0.1-rc.1",
+    "@deepseek-ai/dsh-web": "^0.0.1-rc.1",
+    "@deepseek-ai/schemastery": "^3.18.1",
+    "@types/node": "^22.15.0",
+    "@types/turndown": "^5.0.6",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
   }
 }

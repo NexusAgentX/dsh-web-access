@@ -7,10 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-08-14
+
+### Added
+
+- Ported the pi-web-access search/fetch/PDF/GitHub/YouTube stack onto DeepSeek Harness.
+- Registered `web_search` / `web_access_search`, `fetch_content`, `get_search_content`, and `source_check`.
+- Registered optional `ctx.web` providers under id `web-access`.
+- Added `/websearch`, `/curator`, `/search`, `/google-account`, and `/webaccess`.
+- Kept compatibility with existing `~/.pi/web-search.json` configs.
+
 ## [0.0.1] - 2026-08-14
 
 ### Added
 
 - Reserved the `dsh-web-access` npm name.
 - Shipped an installable DeepSeek Harness bundle stub (`dsh.bundle`).
-- Added a placeholder CLI that reports version and help.
