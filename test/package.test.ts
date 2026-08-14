@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { describe, it } from 'node:test'
 import { fileURLToPath } from 'node:url'
-import { name } from '../src/index.ts'
+import { inject, name } from '../src/index.ts'
 import { createEngine, executeGetSearchContent } from '../src/engine.ts'
 import { generateId, storeResult } from '../src/storage.ts'
 
@@ -14,6 +14,7 @@ describe('dsh-web-access package', () => {
     const pkg = JSON.parse(readFileSync(join(root, '..', 'package.json'), 'utf8')) as { name: string }
     assert.equal(pkg.name, 'dsh-web-access')
     assert.equal(name, 'dsh-web-access')
+    assert.deepEqual(inject, ['tools'])
   })
 
   it('retrieves stored search results', () => {

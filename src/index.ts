@@ -1,5 +1,5 @@
 export const name = 'dsh-web-access'
-export { apply, Config } from './plugin.ts'
+export { apply, Config, inject } from './plugin.ts'
 export type { Config as PluginConfig } from './plugin.ts'
 export { createEngine, executeFetchContent, executeGetSearchContent, executeSourceCheck, executeWebSearch } from './engine.ts'
 export { search } from './gemini-search.ts'
