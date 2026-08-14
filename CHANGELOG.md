@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-08-14
+
+### Fixed
+
+- Inject `web` so the `web-access` search/fetch providers register on the host seam.
+- Always expose `web_access_search`. The standard preset remounts official `web_search` after host plugins apply, which previously ate our search tool.
+
 ## [0.2.2] - 2026-08-14
 
 ### Fixed

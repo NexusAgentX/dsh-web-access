@@ -23,7 +23,7 @@ import { setActiveSession } from './storage.ts'
 import { registerWebProviders } from './web-providers.ts'
 
 export const name = 'dsh-web-access'
-export const inject = ['tools']
+export const inject = ['tools', 'web']
 
 export interface Config {
   replaceOfficialSearch?: boolean
@@ -57,40 +57,10 @@ export function apply(ctx: Context, config: Config = {}): void {
     const searchName = official && !config.replaceOfficialSearch
       ? (engine.names.webSearch === 'web_search' ? 'web_access_search' : engine.names.webSearch)
       : engine.names.webSearch
-    ctx.tools.register(defineTool({
-      name: searchName,
-      description: [
-        'Search the web via OpenAI, Brave, Parallel, TinyFish, Search1API, Searchinfinity, Querit, Tavily, Firecrawl, Jina, SERPdive, Kagi, Bocha, Ollama, SearXNG, DuckDuckGo, Exa, Perplexity, Gemini, AnySearch, xAI, Bright Data, or SerpBase.',
-        'Prefer queries (plural) with 2-4 varied angles over a single query.',
-        'Set workflow to none for raw results, auto-summary for a synthesized summary, or summary-review to open the curator.',
-      ].join(' '),
-      parameters: {
-        query: { type: 'string', description: 'Single search query. For research, prefer queries.' },
-        queries: { type: 'array', items: { type: 'string' }, description: 'Multiple queries searched in sequence.' },
-        numResults: { type: 'number', description: 'Results per query (default 5, max 20).' },
-        includeContent: { type: 'boolean', description: 'Fetch full page content in the background.' },
-        recencyFilter: { type: 'string', enum: ['day', 'week', 'month', 'year'], description: 'Filter by recency.' },
-        domainFilter: { type: 'array', items: { type: 'string' }, description: 'Limit to domains; prefix with - to exclude.' },
-        provider: { type: 'json', description: 'Provider name, array of names, auto, or all.' },
-        workflow: { type: 'string', enum: ['none', 'summary-review', 'auto-summary'], description: 'Search workflow mode.' },
-      },
-      output: {
-        ...jsonTextOutput,
-        presentationMeta: (_args, value) => (searchMetaFromDetails(asDetails(value.details)) ?? { sources: [], truncated: false }) as import('@deepseek-ai/dsh-session').JsonValue,
-      },
-      presentCall(args) {
-        const label = args.query ?? (Array.isArray(args.queries) ? `${args.queries.length} queries` : 'search')
-        return { card: 'generic', title: `${searchName} ${String(label).slice(0, 60)}`, kind: 'search' }
-      },
-      presentResult(args, result) {
-        return presentSearchResult(args, result)
-      },
-      async execute(args, exec) {
-        bindSession(exec.agent)
-        engine.hooks.injectNotice = text => injectNotice(exec.agent, text)
-        return asJson(await executeWebSearch(engine, args, exec.signal))
-      },
-    }))
+    registerSearchTool(ctx, engine, searchName)
+    // Host apply runs before the standard preset remounts official web_search.
+    // Keep a stable alias so the model can still reach this backend.
+    if (searchName !== 'web_access_search') registerSearchTool(ctx, engine, 'web_access_search')
   }
 
   if (isToolEnabled(fileConfig, 'fetchContent')) {
@@ -186,6 +156,43 @@ export function apply(ctx: Context, config: Config = {}): void {
   if (isCommandEnabled(fileConfig, 'websearch') || isCommandEnabled(fileConfig, 'curator') || isCommandEnabled(fileConfig, 'search') || isCommandEnabled(fileConfig, 'google-account')) {
     registerCommands(ctx, engine)
   }
+}
+
+function registerSearchTool(ctx: Context, engine: ReturnType<typeof createEngine>, searchName: string): void {
+  ctx.tools.register(defineTool({
+    name: searchName,
+    description: [
+      'Search the web via OpenAI, Brave, Parallel, TinyFish, Search1API, Searchinfinity, Querit, Tavily, Firecrawl, Jina, SERPdive, Kagi, Bocha, Ollama, SearXNG, DuckDuckGo, Exa, Perplexity, Gemini, AnySearch, xAI, Bright Data, or SerpBase.',
+      'Prefer queries (plural) with 2-4 varied angles over a single query.',
+      'Set workflow to none for raw results, auto-summary for a synthesized summary, or summary-review to open the curator.',
+    ].join(' '),
+    parameters: {
+      query: { type: 'string', description: 'Single search query. For research, prefer queries.' },
+      queries: { type: 'array', items: { type: 'string' }, description: 'Multiple queries searched in sequence.' },
+      numResults: { type: 'number', description: 'Results per query (default 5, max 20).' },
+      includeContent: { type: 'boolean', description: 'Fetch full page content in the background.' },
+      recencyFilter: { type: 'string', enum: ['day', 'week', 'month', 'year'], description: 'Filter by recency.' },
+      domainFilter: { type: 'array', items: { type: 'string' }, description: 'Limit to domains; prefix with - to exclude.' },
+      provider: { type: 'json', description: 'Provider name, array of names, auto, or all.' },
+      workflow: { type: 'string', enum: ['none', 'summary-review', 'auto-summary'], description: 'Search workflow mode.' },
+    },
+    output: {
+      ...jsonTextOutput,
+      presentationMeta: (_args, value) => (searchMetaFromDetails(asDetails(value.details)) ?? { sources: [], truncated: false }) as import('@deepseek-ai/dsh-session').JsonValue,
+    },
+    presentCall(args) {
+      const label = args.query ?? (Array.isArray(args.queries) ? `${args.queries.length} queries` : 'search')
+      return { card: 'generic', title: `${searchName} ${String(label).slice(0, 60)}`, kind: 'search' }
+    },
+    presentResult(args, result) {
+      return presentSearchResult(args, result)
+    },
+    async execute(args, exec) {
+      bindSession(exec.agent)
+      engine.hooks.injectNotice = text => injectNotice(exec.agent, text)
+      return asJson(await executeWebSearch(engine, args, exec.signal))
+    },
+  }))
 }
 
 const jsonTextOutput = {

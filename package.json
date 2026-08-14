@@ -1,6 +1,6 @@
 {
   "name": "dsh-web-access",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Web access for DeepSeek Harness — multi-provider search/fetch on ctx.web, plus GitHub/PDF/YouTube extraction.",
   "type": "module",
   "main": "./dist/index.js",

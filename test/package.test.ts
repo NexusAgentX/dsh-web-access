@@ -14,7 +14,7 @@ describe('dsh-web-access package', () => {
     const pkg = JSON.parse(readFileSync(join(root, '..', 'package.json'), 'utf8')) as { name: string }
     assert.equal(pkg.name, 'dsh-web-access')
     assert.equal(name, 'dsh-web-access')
-    assert.deepEqual(inject, ['tools'])
+    assert.deepEqual(inject, ['tools', 'web'])
   })
 
   it('retrieves stored search results', () => {
