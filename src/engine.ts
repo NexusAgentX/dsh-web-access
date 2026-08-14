@@ -68,6 +68,7 @@ import {
   MAX_CURATOR_TIMEOUT_SECONDS,
 } from './config.ts'
 import { attachmentsFromExtracted, type ImageSaver } from './images.ts'
+import { CURATOR_MOUNT_PATH, isCuratorMountEnabled } from './curator-mount.ts'
 import { setLastCuratorUrl } from './ui-state.ts'
 
 let extractModulePromise: Promise<typeof import('./extract.ts')> | undefined
@@ -436,7 +437,9 @@ async function executeCuratedSearch(engine: Engine, params: {
       },
     }).then(async started => {
       handle = started
-      setLastCuratorUrl(started.url)
+      setLastCuratorUrl(isCuratorMountEnabled()
+        ? `${CURATOR_MOUNT_PATH}/?session=${encodeURIComponent(sessionToken)}`
+        : started.url)
       void openInBrowser(started.url).catch(() => undefined)
       for (const [index, query] of params.queryList.entries()) {
         if (settled || searchSignal.aborted) break

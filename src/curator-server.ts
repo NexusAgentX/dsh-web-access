@@ -2,6 +2,7 @@ import http, { type IncomingMessage, type ServerResponse } from "node:http";
 import { generateCuratorPage } from "./curator-page.ts";
 import type { SummaryMeta } from "./summary-review.ts";
 import { resolveCuratorNetworkConfig } from "./utils.ts";
+import { CURATOR_MOUNT_PATH, curatorPageUrl, isCuratorMountEnabled, registerCuratorHandler } from "./curator-mount.ts";
 
 const STALE_THRESHOLD_MS = 30000;
 const WATCHDOG_INTERVAL_MS = 1000;
@@ -338,12 +339,13 @@ export function startCuratorServer(
 		searchProvider,
 		summaryModels,
 		defaultSummaryModel,
+		isCuratorMountEnabled() ? CURATOR_MOUNT_PATH : "",
 	);
 
-	const server = http.createServer(async (req, res) => {
+	const onRequest = async (req: IncomingMessage, res: ServerResponse, pathname: string, search: string) => {
 		try {
 			const method = req.method || "GET";
-			const url = new URL(req.url || "/", `http://${req.headers.host || "127.0.0.1"}`);
+			const url = new URL(pathname + search, "http://127.0.0.1");
 
 			if (method === "GET" && url.pathname === "/") {
 				const token = url.searchParams.get("session");
@@ -663,7 +665,77 @@ export function startCuratorServer(
 			const message = err instanceof Error ? err.message : "Server error";
 			sendJson(res, 500, { ok: false, error: message });
 		}
+	};
+
+	const server = http.createServer(async (req, res) => {
+		const parsed = new URL(req.url || "/", `http://${req.headers.host || "127.0.0.1"}`);
+		await onRequest(req, res, parsed.pathname, parsed.search);
 	});
+	const unregister = registerCuratorHandler(sessionToken, onRequest);
+
+	const finishHandle = (url: string): CuratorServerHandle => ({
+		server,
+		url,
+		close: () => {
+			unregister();
+			const wasOpen = markCompleted();
+			try { server.close(); } catch {}
+			if (wasOpen) setImmediate(() => callbacks.onCancel("stale"));
+		},
+		pushResult: (queryIndex, data) => {
+			if (completed) return;
+			nextQueryIndex = Math.max(nextQueryIndex, queryIndex + 1);
+			const eventData: CuratorResultEventData = { ...data, queryIndex, query: data.query ?? queries[queryIndex] ?? "" };
+			retainStreamedEvent({ event: "result", data: eventData });
+			sendSSE("result", eventData);
+		},
+		pushError: (queryIndex, error, provider, meta) => {
+			if (completed) return;
+			nextQueryIndex = Math.max(nextQueryIndex, queryIndex + 1);
+			const eventData: CuratorSearchErrorEventData = { queryIndex, query: meta?.query ?? queries[queryIndex] ?? "", error, provider, slotIndex: meta?.slotIndex };
+			retainStreamedEvent({ event: "search-error", data: eventData });
+			sendSSE("search-error", eventData);
+		},
+		searchesDone: () => {
+			if (completed) return;
+			searchStreamDone = true;
+			sendSSE("done", {});
+			state = "RESULT_SELECTION";
+			stateChangedAt = Date.now();
+		},
+		getConnectionState: () => ({
+			browserConnected,
+			lastHeartbeatAgeMs: Date.now() - lastHeartbeatAt,
+		}),
+	});
+
+	const startWatchdog = () => {
+		watchdog = setInterval(() => {
+			if (completed) return;
+			if (!browserConnected) {
+				const noBrowserTimeoutMs = Math.max(5000, getEffectiveTimeoutMs());
+				if (state !== "RESULT_SELECTION") return;
+				if (Date.now() - stateChangedAt <= noBrowserTimeoutMs) return;
+				if (!markCompleted()) return;
+				setImmediate(() => callbacks.onCancel("timeout"));
+				return;
+			}
+			if (shouldTimeoutFromClientIdle()) {
+				if (!markCompleted()) return;
+				setImmediate(() => callbacks.onCancel("timeout"));
+				return;
+			}
+			if (Date.now() - lastHeartbeatAt <= STALE_THRESHOLD_MS) return;
+			const staleReason = state === "RESULT_SELECTION" ? "timeout" : "stale";
+			if (!markCompleted()) return;
+			setImmediate(() => callbacks.onCancel(staleReason));
+		}, WATCHDOG_INTERVAL_MS);
+	};
+
+	if (isCuratorMountEnabled()) {
+		startWatchdog();
+		return Promise.resolve(finishHandle(curatorPageUrl(sessionToken)));
+	}
 
 	return new Promise((resolve, reject) => {
 		const onError = (err: Error) => {
@@ -681,64 +753,8 @@ export function startCuratorServer(
 				return;
 			}
 			const url = `http://${networkConfig.host}:${addr.port}/?session=${sessionToken}`;
-
-			watchdog = setInterval(() => {
-				if (completed) return;
-				if (!browserConnected) {
-					const noBrowserTimeoutMs = Math.max(5000, getEffectiveTimeoutMs());
-					if (state !== "RESULT_SELECTION") return;
-					if (Date.now() - stateChangedAt <= noBrowserTimeoutMs) return;
-					if (!markCompleted()) return;
-					setImmediate(() => callbacks.onCancel("timeout"));
-					return;
-				}
-				if (shouldTimeoutFromClientIdle()) {
-					if (!markCompleted()) return;
-					setImmediate(() => callbacks.onCancel("timeout"));
-					return;
-				}
-				if (Date.now() - lastHeartbeatAt <= STALE_THRESHOLD_MS) return;
-				const staleReason = state === "RESULT_SELECTION" ? "timeout" : "stale";
-				if (!markCompleted()) return;
-				setImmediate(() => callbacks.onCancel(staleReason));
-			}, WATCHDOG_INTERVAL_MS);
-
-			resolve({
-				server,
-				url,
-				close: () => {
-					const wasOpen = markCompleted();
-					try { server.close(); } catch {}
-					if (wasOpen) {
-						setImmediate(() => callbacks.onCancel("stale"));
-					}
-				},
-				pushResult: (queryIndex, data) => {
-					if (completed) return;
-					nextQueryIndex = Math.max(nextQueryIndex, queryIndex + 1);
-					const eventData: CuratorResultEventData = { ...data, queryIndex, query: data.query ?? queries[queryIndex] ?? "" };
-					retainStreamedEvent({ event: "result", data: eventData });
-					sendSSE("result", eventData);
-				},
-				pushError: (queryIndex, error, provider, meta) => {
-					if (completed) return;
-					nextQueryIndex = Math.max(nextQueryIndex, queryIndex + 1);
-					const eventData: CuratorSearchErrorEventData = { queryIndex, query: meta?.query ?? queries[queryIndex] ?? "", error, provider, slotIndex: meta?.slotIndex };
-					retainStreamedEvent({ event: "search-error", data: eventData });
-					sendSSE("search-error", eventData);
-				},
-				searchesDone: () => {
-					if (completed) return;
-					searchStreamDone = true;
-					sendSSE("done", {});
-					state = "RESULT_SELECTION";
-					stateChangedAt = Date.now();
-				},
-				getConnectionState: () => ({
-					browserConnected,
-					lastHeartbeatAgeMs: Date.now() - lastHeartbeatAt,
-				}),
-			});
+			startWatchdog();
+			resolve(finishHandle(url));
 		});
 	});
 }

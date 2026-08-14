@@ -1,10 +1,12 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { Context } from '@deepseek-ai/cordis'
 import { applyPublicConfig, getPublicConfig } from './public-config.ts'
+import { CURATOR_MOUNT_PATH, dispatchCuratorRequest, setCuratorPublicOrigin } from './curator-mount.ts'
 import { formatStatus, type Engine } from './engine.ts'
 import { getActivitySnapshot, getLastCuratorUrl } from './ui-state.ts'
 
 interface WebServer {
+  port?: number
   register(route: { kind: 'exact' | 'prefix'; path: string; handler: (req: IncomingMessage, res: ServerResponse) => void | Promise<void> }): () => void
   tapIndex?(transform: (html: string) => string): () => void
 }
@@ -13,6 +15,10 @@ export function registerWebUi(ctx: Context, engine: Engine): void {
   const server = ctx.get('webServer') as WebServer | undefined
   if (!server) return
 
+  const port = typeof server.port === 'number' && server.port > 0 ? server.port : 3080
+  setCuratorPublicOrigin(`http://127.0.0.1:${port}`)
+  ctx.effect(() => () => setCuratorPublicOrigin(''))
+  ctx.effect(() => server.register({ kind: 'prefix', path: CURATOR_MOUNT_PATH, handler: (req, res) => { dispatchCuratorRequest(req, res) } }))
   ctx.effect(() => server.register({ kind: 'exact', path: '/dsh-web-access/api/config', handler: (req, res) => handleConfig(req, res) }))
   ctx.effect(() => server.register({ kind: 'exact', path: '/dsh-web-access/api/status', handler: (_req, res) => void handleStatus(engine, res) }))
   ctx.effect(() => server.register({ kind: 'exact', path: '/dsh-web-access/api/activity', handler: (_req, res) => handleActivity(res) }))

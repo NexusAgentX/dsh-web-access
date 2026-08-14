@@ -60,9 +60,10 @@ export function generateCuratorPage(
 	searchProvider: string,
 	summaryModels: Array<{ value: string; label: string }>,
 	defaultSummaryModel: string | null,
+	basePath = "",
 ): string {
 	const providerButtonsHtml = buildProviderButtons(availableProviders, defaultProvider, queries.length > 0);
-	const inlineData = safeInlineJSON({ queries, sessionToken, timeout, defaultProvider, searchProvider, summaryModels, defaultSummaryModel, availableProviders });
+	const inlineData = safeInlineJSON({ queries, sessionToken, timeout, defaultProvider, searchProvider, summaryModels, defaultSummaryModel, availableProviders, apiBase: basePath.replace(/\/$/, "") });
 
 	return `<!DOCTYPE html>
 <html lang="en">
@@ -1454,6 +1455,8 @@ main {
 const SCRIPT = `(function() {
   var DATA = __INLINE_DATA__;
   var token = DATA.sessionToken;
+  var API_BASE = typeof DATA.apiBase === "string" ? DATA.apiBase : "";
+  function apiUrl(path) { return API_BASE + path; }
   var timeoutSec = DATA.timeout;
   var queries = Array.isArray(DATA.queries) ? DATA.queries : [];
   var providers = ["all", "openai", "exa", "brave", "parallel", "tinyfish", "search1api", "searchinfinity", "querit", "tavily", "firecrawl", "jina", "serpdive", "kagi", "bocha", "ollama", "searxng", "duckduckgo", "perplexity", "gemini", "anysearch", "xai", "brightdata", "serpbase"];
@@ -1605,7 +1608,7 @@ const SCRIPT = `(function() {
   }
 
   function post(path, body) {
-    return fetch(path, {
+    return fetch(apiUrl(path) + "?session=" + encodeURIComponent(token), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(Object.assign({ token: token }, body)),
@@ -2766,7 +2769,7 @@ const SCRIPT = `(function() {
   recomputeProviderStates();
   updateStageUI();
 
-  es = new EventSource("/events?session=" + encodeURIComponent(token));
+  es = new EventSource(apiUrl("/events") + "?session=" + encodeURIComponent(token));
 
   function parseSseEventData(eventName, e) {
     try {
@@ -2847,7 +2850,7 @@ const SCRIPT = `(function() {
   function syncStateFromServer(showWarning) {
     if (stateSyncInFlight || submitted || timerExpired || searchesDone) return;
     stateSyncInFlight = true;
-    fetch("/state?session=" + encodeURIComponent(token), { cache: "no-store" })
+    fetch(apiUrl("/state") + "?session=" + encodeURIComponent(token), { cache: "no-store" })
       .then(function(res) {
         return res.text().then(function(raw) {
           var data = raw ? JSON.parse(raw) : null;
