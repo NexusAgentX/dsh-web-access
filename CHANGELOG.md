@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Session-scoped search/fetch cache that restores from disk when the same dsh session comes back.
 - Saving keys in the Web UI invalidates provider caches so new credentials work without restart.
 - Curator now mounts at `/dsh-web-access/curator` on the dsh web server (same origin, no extra port).
+- Ships a `dsh.client` bundle that registers the overlay into `shell.overlay`.
 
 ## [0.2.0] - 2026-08-14
 

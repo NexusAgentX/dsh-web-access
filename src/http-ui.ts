@@ -25,9 +25,11 @@ export function registerWebUi(ctx: Context, engine: Engine): void {
   ctx.effect(() => server.register({ kind: 'exact', path: '/dsh-web-access/ui.js', handler: (_req, res) => send(res, 200, overlayScript(), 'application/javascript; charset=utf-8') }))
   ctx.effect(() => server.register({ kind: 'exact', path: '/dsh-web-access/panel', handler: (_req, res) => send(res, 200, panelHtml(), 'text/html; charset=utf-8') }))
   if (server.tapIndex) {
-    ctx.effect(() => server.tapIndex!(html => html.includes('dsh-web-access/ui.js')
-      ? html
-      : html.replace('</body>', '<script src="/dsh-web-access/ui.js" defer></script></body>')))
+    ctx.effect(() => server.tapIndex!(html => {
+      if (html.includes('dsh-web-access-fallback')) return html
+      const boot = '<script data-dsh-web-access-fallback>document.addEventListener("DOMContentLoaded",function(){var g=window.__DSH_BOOT__;if(g&&g.entries&&g.entries.some(function(e){return e.id==="dsh-web-access"}))return;var s=document.createElement("script");s.src="/dsh-web-access/ui.js";document.body.appendChild(s)});</script>'
+      return html.includes('</body>') ? html.replace('</body>', `${boot}</body>`) : html + boot
+    }))
   }
 }
 

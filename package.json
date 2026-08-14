@@ -11,6 +11,9 @@
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
+    "./client": {
+      "default": "./dist/client.js"
+    },
     "./package.json": "./package.json"
   },
   "bin": {
@@ -26,10 +29,17 @@
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-layout"
+      ]
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json && chmod +x dist/cli.js",
+    "build": "tsc -p tsconfig.json && node scripts/build-client.mjs && chmod +x dist/cli.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "NODE_OPTIONS='--experimental-strip-types --no-warnings' node --experimental-strip-types --test test/*.test.ts test/*.test.mjs",
     "prepack": "npm run build && npm test"
@@ -68,8 +78,8 @@
     "p-limit": "^6.1.0",
     "promise.try": "^2.0.1",
     "turndown": "^7.2.0",
-    "unpdf": "^1.6.2",
-    "undici": "^8.9.0"
+    "undici": "^8.9.0",
+    "unpdf": "^1.6.2"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
@@ -98,8 +108,15 @@
     "@deepseek-ai/dsh-web": "^0.0.1-rc.1",
     "@deepseek-ai/schemastery": "^3.18.1",
     "@types/node": "^22.15.0",
+    "@types/react": "^18.3.31",
     "@types/turndown": "^5.0.6",
+    "esbuild": "^0.25.12",
+    "react": "^18.3.1",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"
+  },
+  "allowScripts": {
+    "esbuild@0.25.12": true,
+    "esbuild@0.28.2": true
   }
 }

@@ -12,7 +12,7 @@ This plugin ports the [pi-web-access](https://github.com/nicobailon/pi-web-acces
 - `source_check` for claim verification
 - optional `ctx.web` providers so official `web_search` / `web_fetch` can use the same backends
 - `/websearch`, `/curator`, `/search`, `/google-account`, `/webaccess`
-- Web UI overlay: activity monitor (`Ctrl+Shift+W`), curator pane (`Ctrl+Shift+S`), and a config panel
+- Web UI overlay registered on the official `shell.overlay` slot via `dsh.client` (falls back to a script inject if the client graph misses the package)
 - Official `card: 'web'` search/fetch cards, background-fetch notices, and image attachments when `ctx.attachments` is present
 
 It is an independent plugin. It is not affiliated with DeepSeek AI.
