@@ -67,6 +67,8 @@ import {
   DEFAULT_REMOTE_CURATOR_TIMEOUT_SECONDS,
   MAX_CURATOR_TIMEOUT_SECONDS,
 } from './config.ts'
+import { attachmentsFromExtracted, type ImageSaver } from './images.ts'
+import { setLastCuratorUrl } from './ui-state.ts'
 
 let extractModulePromise: Promise<typeof import('./extract.ts')> | undefined
 
@@ -75,20 +77,27 @@ export interface ToolResult {
   details: Record<string, unknown>
 }
 
+export interface EngineHooks {
+  injectNotice?: (text: string) => void
+  images?: ImageSaver
+}
+
 export interface Engine {
   names: ToolNames
   ctx: ExtensionContext
   defaultWorkflow: WebSearchWorkflow
+  hooks: EngineHooks
 }
 
 const pendingFetches = new Map<string, AbortController>()
 
-export function createEngine(ctx = createHostContext()): Engine {
+export function createEngine(ctx = createHostContext(), hooks: EngineHooks = {}): Engine {
   const config = loadConfigSafe()
   return {
     names: resolveToolNames(config),
     ctx,
     defaultWorkflow: resolveWorkflow(config.workflow, 'auto-summary'),
+    hooks,
   }
 }
 
@@ -186,7 +195,7 @@ function formatFullResults(queryData: QueryResultData): string {
   return output
 }
 
-function startBackgroundFetch(urls: string[]): string | null {
+function startBackgroundFetch(engine: Engine, urls: string[]): string | null {
   if (urls.length === 0) return null
   const fetchId = generateId()
   const controller = new AbortController()
@@ -200,6 +209,8 @@ function startBackgroundFetch(urls: string[]): string | null {
         timestamp: Date.now(),
         urls: stripThumbnails(fetched),
       })
+      const ok = fetched.filter(item => !item.error).length
+      engine.hooks.injectNotice?.(`Content fetched for ${ok}/${fetched.length} URLs [${fetchId}]. Full page content is available via ${engine.names.getSearchContent}.`)
     })
     .catch(() => undefined)
     .finally(() => { pendingFetches.delete(fetchId) })
@@ -301,7 +312,7 @@ export async function executeWebSearch(engine: Engine, params: {
     fetchId = generateId()
     storeFetchedContentResult(fetchId, { id: fetchId, type: 'fetch', timestamp: Date.now(), urls: stripThumbnails(allInlineContent) })
   } else if (params.includeContent) {
-    fetchId = startBackgroundFetch(allUrls)
+    fetchId = startBackgroundFetch(engine, allUrls)
   }
 
   let text = buildSearchText({ queryList, results: searchResults, approvedSummary })
@@ -310,6 +321,11 @@ export async function executeWebSearch(engine: Engine, params: {
       ? `\n\n---\nFull content for ${allInlineContent.length} sources available [${fetchId}].`
       : `\n\n---\nContent fetching in background [${fetchId}].`
   }
+  const sources = searchResults.flatMap(result => result.results.map(item => ({
+    url: item.url,
+    ...item.title ? { title: item.title } : {},
+    ...item.snippet ? { snippet: item.snippet } : {},
+  })))
   return {
     text,
     details: {
@@ -317,8 +333,11 @@ export async function executeWebSearch(engine: Engine, params: {
       fetchId,
       queryCount: queryList.length,
       successfulQueries: searchResults.filter(result => !result.error).length,
-      totalResults: searchResults.reduce((sum, result) => sum + result.results.length, 0),
+      totalResults: sources.length,
       workflow,
+      sources,
+      truncated: false,
+      ...approvedSummary ? { answer: approvedSummary } : searchResults[0]?.answer ? { answer: searchResults[0].answer } : {},
       summary: approvedSummary && summaryMeta ? { text: approvedSummary, ...summaryMeta } : undefined,
     },
   }
@@ -417,6 +436,7 @@ async function executeCuratedSearch(engine: Engine, params: {
       },
     }).then(async started => {
       handle = started
+      setLastCuratorUrl(started.url)
       void openInBrowser(started.url).catch(() => undefined)
       for (const [index, query] of params.queryList.entries()) {
         if (settled || searchSignal.aborted) break
@@ -518,17 +538,21 @@ export async function executeFetchContent(engine: Engine, params: Record<string,
     }
     if (result.frames?.length) text = `${result.frames.length} frame(s) extracted.\n\n${text}`
     else if (result.thumbnail) text = `Image fetched (${result.mimeType ?? 'image'}).\n\n${text}`
+    const attachments = await attachmentsFromExtracted(result, engine.hooks.images)
     return {
       text,
       details: {
         responseId,
         title: result.title,
+        url: result.url,
         urlCount: 1,
         successful: 1,
         totalChars: result.content.length,
         truncated: slice.endOffset < result.content.length,
         mimeType: result.mimeType,
         status: result.status,
+        statusCode: result.status ?? 200,
+        ...attachments.length > 0 ? { attachments } : {},
       },
     }
   }

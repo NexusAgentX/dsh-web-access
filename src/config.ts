@@ -81,7 +81,7 @@ export function loadConfigSafe(): WebSearchConfig {
   }
 }
 
-export function saveConfig(updates: Partial<WebSearchConfig>): void {
+export function saveConfig(updates: Partial<WebSearchConfig> | Record<string, unknown>): void {
   const config = loadConfigSafe()
   Object.assign(config, updates)
   cached = config

@@ -71,7 +71,23 @@ export async function resizeImage(
 	}
 }
 
+export type CompleteFn = typeof defaultComplete
+
+let completeImpl: CompleteFn = defaultComplete
+
+export function setCompleteImplementation(fn?: CompleteFn): void {
+	completeImpl = fn ?? defaultComplete
+}
+
 export async function complete(
+	model: Model,
+	params: { systemPrompt?: string; messages: Message[] },
+	options: { apiKey?: string; headers?: Record<string, string | null>; signal?: AbortSignal; maxTokens?: number } = {},
+): Promise<CompleteResponse> {
+	return completeImpl(model, params, options)
+}
+
+export async function defaultComplete(
 	model: Model,
 	params: { systemPrompt?: string; messages: Message[] },
 	options: { apiKey?: string; headers?: Record<string, string | null>; signal?: AbortSignal; maxTokens?: number } = {},

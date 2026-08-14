@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-08-14
+
+### Added
+
+- Official `card: 'web'` presentation for search and fetch results.
+- Web UI overlay with activity, curator, config, and status tabs.
+- Keyboard shortcuts `Ctrl+Shift+W` (activity) and `Ctrl+Shift+S` (curator).
+- Background `includeContent` completion injects a plugin notice into the agent.
+- Image/video frames are saved through `ctx.attachments` when available.
+- Summary/answer generation uses `ctx.llm` when a harness model is configured.
+
 ## [0.1.0] - 2026-08-14
 
 ### Added

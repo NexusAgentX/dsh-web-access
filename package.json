@@ -1,6 +1,6 @@
 {
   "name": "dsh-web-access",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Web access for DeepSeek Harness — multi-provider search/fetch on ctx.web, plus GitHub/PDF/YouTube extraction.",
   "type": "module",
   "main": "./dist/index.js",
@@ -74,6 +74,7 @@
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
     "@deepseek-ai/dsh-commands": "^0.0.1-rc.1",
+    "@deepseek-ai/dsh-llm": "^0.0.1-rc.1",
     "@deepseek-ai/dsh-tools": "^0.0.1-rc.1",
     "@deepseek-ai/dsh-web": "^0.0.1-rc.1",
     "@deepseek-ai/schemastery": "^3.18.1"
@@ -84,11 +85,15 @@
     },
     "@deepseek-ai/dsh-web": {
       "optional": true
+    },
+    "@deepseek-ai/dsh-llm": {
+      "optional": true
     }
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
     "@deepseek-ai/dsh-commands": "^0.0.1-rc.1",
+    "@deepseek-ai/dsh-llm": "^0.0.1-rc.1",
     "@deepseek-ai/dsh-tools": "^0.0.1-rc.1",
     "@deepseek-ai/dsh-web": "^0.0.1-rc.1",
     "@deepseek-ai/schemastery": "^3.18.1",

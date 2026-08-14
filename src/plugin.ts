@@ -3,6 +3,7 @@ import Schema from '@deepseek-ai/schemastery'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-commands'
 import type {} from '@deepseek-ai/dsh-tools'
+import { createUserMessage } from '@deepseek-ai/dsh-llm/message'
 import { isCommandEnabled, isToolEnabled, loadConfigSafe } from './config.ts'
 import { registerCommands } from './commands.ts'
 import {
@@ -14,6 +15,9 @@ import {
   executeWebSearch,
 } from './engine.ts'
 import { createHostContext } from './host.ts'
+import { registerWebUi } from './http-ui.ts'
+import { bindHarnessLlm } from './llm-bridge.ts'
+import { fetchMetaFromDetails, presentFetchResult, presentSearchResult, searchMetaFromDetails } from './presentation.ts'
 import { registerWebProviders } from './web-providers.ts'
 
 export const name = 'dsh-web-access'
@@ -31,9 +35,14 @@ export const Config: Schema<Config> = Schema.object({
 
 export function apply(ctx: Context, config: Config = {}): void {
   const fileConfig = loadConfigSafe()
-  const engine = createEngine(createHostContext())
+  const attachments = ctx.get('attachments') as { saveImage: (input: { data: Uint8Array; mediaType: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif'; name?: string }) => Promise<unknown> } | undefined
+  const engine = createEngine(createHostContext({ hasUI: true }), {
+    images: attachments ? { saveImage: input => attachments.saveImage(input) } : undefined,
+  })
 
   ctx.effect(() => () => disposeEngine(), 'dsh-web-access.runtime')
+  void bindHarnessLlm(ctx, engine)
+  registerWebUi(ctx, engine)
 
   if (isToolEnabled(fileConfig, 'webSearch')) {
     const official = ctx.tools.get(engine.names.webSearch)
@@ -57,12 +66,19 @@ export function apply(ctx: Context, config: Config = {}): void {
         provider: { type: 'json', description: 'Provider name, array of names, auto, or all.' },
         workflow: { type: 'string', enum: ['none', 'summary-review', 'auto-summary'], description: 'Search workflow mode.' },
       },
-      output: jsonTextOutput,
+      output: {
+        ...jsonTextOutput,
+        presentationMeta: (_args, value) => (searchMetaFromDetails(asDetails(value.details)) ?? { sources: [], truncated: false }) as import('@deepseek-ai/dsh-session').JsonValue,
+      },
       presentCall(args) {
         const label = args.query ?? (Array.isArray(args.queries) ? `${args.queries.length} queries` : 'search')
         return { card: 'generic', title: `${searchName} ${String(label).slice(0, 60)}`, kind: 'search' }
       },
+      presentResult(args, result) {
+        return presentSearchResult(args, result)
+      },
       async execute(args, exec) {
+        engine.hooks.injectNotice = text => injectNotice(exec.agent, text)
         return asJson(await executeWebSearch(engine, args, exec.signal))
       },
     }))
@@ -83,11 +99,21 @@ export function apply(ctx: Context, config: Config = {}): void {
         frames: { type: 'integer', description: 'Number of video frames to extract (1-12).' },
         model: { type: 'string', description: 'Gemini model override for video/YouTube analysis.' },
       },
-      output: jsonTextOutput,
+      output: {
+        ...jsonTextOutput,
+        presentationMeta: (_args, value) => (fetchMetaFromDetails(asDetails(value.details)) ?? { url: '', statusCode: 0, truncated: false }) as import('@deepseek-ai/dsh-session').JsonValue,
+        render(_args, value) {
+          return renderWithAttachments(value)
+        },
+      },
       presentCall(args) {
-        return { card: 'generic', title: `fetch ${args.url ?? 'urls'}`, kind: 'read' }
+        return { card: 'generic', title: `fetch ${args.url ?? 'urls'}`, kind: 'search' }
+      },
+      presentResult(args, result) {
+        return presentFetchResult(args, result)
       },
       async execute(args, exec) {
+        engine.hooks.injectNotice = text => injectNotice(exec.agent, text)
         return asJson(await executeFetchContent(engine, args, exec.signal))
       },
     }))
@@ -166,4 +192,38 @@ const jsonTextOutput = {
 
 function asJson(result: { text: string; details: Record<string, unknown> }) {
   return JSON.parse(JSON.stringify({ text: result.text, details: result.details })) as { text: string; details: import('@deepseek-ai/dsh-session').JsonValue }
+}
+
+function asDetails(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
+}
+
+function renderWithAttachments(value: { text: string; details: import('@deepseek-ai/dsh-session').JsonValue }) {
+  const blocks: import('@deepseek-ai/dsh-llm').ContentBlock[] = []
+  const attachments = asDetails(value.details).attachments
+  if (Array.isArray(attachments)) {
+    for (const attachment of attachments) {
+      if (isImageAttachment(attachment)) blocks.push({ type: 'image', attachment })
+    }
+  }
+  blocks.push({ type: 'text', text: value.text })
+  return blocks
+}
+
+function isImageAttachment(value: unknown): value is import('@deepseek-ai/dsh-llm').ImageBlock['attachment'] {
+  if (!value || typeof value !== 'object') return false
+  const record = value as Record<string, unknown>
+  return typeof record.attachmentId === 'string' && typeof record.mediaType === 'string' && typeof record.bytes === 'number'
+}
+
+function injectNotice(agent: { inject: (message: ReturnType<typeof createUserMessage>) => void } | undefined, text: string): void {
+  if (!agent) return
+  try {
+    agent.inject(createUserMessage({
+      content: [{ type: 'text', text }],
+      source: { kind: 'plugin', plugin: 'dsh-web-access', form: 'notice', summary: text.slice(0, 120) },
+    }))
+  } catch {
+    // Agent may already be disposed.
+  }
 }
