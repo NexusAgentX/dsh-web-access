@@ -61,11 +61,11 @@ export const MAX_PDF_MAX_SIZE_MB = 50;
 export const MAX_DATALAB_TIMEOUT_MS = 300_000;
 const DEFAULT_MAX_PAGES = 100;
 const DEFAULT_OUTPUT_DIR = join(tmpdir(), "pi-web-pdf");
-const CONFIG_PATH = getWebSearchConfigPath();
+function configPath(): string { return getWebSearchConfigPath(); }
 const PAGE_MARKER_PATTERN = /^<!-- Page (\d+) -->$/gm;
 
 export function loadPDFConfig(): PDFConfig {
-	if (!existsSync(CONFIG_PATH)) {
+	if (!existsSync(configPath())) {
 		return {
 			enabled: true,
 			maxSizeMB: DEFAULT_PDF_MAX_SIZE_MB,
@@ -75,13 +75,13 @@ export function loadPDFConfig(): PDFConfig {
 		};
 	}
 
-	const rawText = readFileSync(CONFIG_PATH, "utf-8");
+	const rawText = readFileSync(configPath(), "utf-8");
 	let raw: unknown;
 	try {
 		raw = JSON.parse(rawText) as unknown;
 	} catch (err) {
 		const message = err instanceof Error ? err.message : String(err);
-		throw new Error(`Failed to parse ${CONFIG_PATH}: ${message}`);
+		throw new Error(`Failed to parse ${configPath()}: ${message}`);
 	}
 
 	const root =

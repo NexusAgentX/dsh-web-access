@@ -4,10 +4,11 @@ import type { ExtractedContent, ExtractOptions } from "./extract.ts";
 import type { SearchOptions, SearchResponse } from "./perplexity.ts";
 import { hasCredentialSource, redactCredential, resolveCredential } from "./credential-source.ts";
 import { getWebSearchConfigPath } from "./utils.ts";
+import { providerConfigEpoch } from "./provider-config-epoch.ts";
 
 const PARALLEL_SEARCH_URL = "https://api.parallel.ai/v1/search";
 const PARALLEL_EXTRACT_URL = "https://api.parallel.ai/v1/extract";
-const CONFIG_PATH = getWebSearchConfigPath();
+function configPath(): string { return getWebSearchConfigPath(); }
 const MIN_PARALLEL_API_KEY_LENGTH = 8;
 const MIN_USEFUL_CONTENT = 500;
 const SEARCH_TIMEOUT_MS = 60_000;
@@ -50,22 +51,24 @@ interface ParallelSearchOptions extends SearchOptions {
 	includeContent?: boolean;
 }
 
+let cachedConfigEpoch = -1;
 let cachedConfig: WebSearchConfig | null = null;
 
 function loadConfig(): WebSearchConfig {
-	if (cachedConfig) return cachedConfig;
-	if (!existsSync(CONFIG_PATH)) {
+	if (cachedConfig && cachedConfigEpoch === providerConfigEpoch()) return cachedConfig;
+	cachedConfigEpoch = providerConfigEpoch();
+	if (!existsSync(configPath())) {
 		cachedConfig = {};
 		return cachedConfig;
 	}
 
-	const raw = readFileSync(CONFIG_PATH, "utf-8");
+	const raw = readFileSync(configPath(), "utf-8");
 	try {
 		cachedConfig = JSON.parse(raw) as WebSearchConfig;
 		return cachedConfig;
 	} catch (err) {
 		const message = err instanceof Error ? err.message : String(err);
-		throw new Error(`Failed to parse ${CONFIG_PATH}: ${message}`);
+		throw new Error(`Failed to parse ${configPath()}: ${message}`);
 	}
 }
 
@@ -120,7 +123,7 @@ async function getApiKey(signal?: AbortSignal): Promise<string> {
 	if (!key) {
 		throw new Error(
 			"Parallel API key not found. Either:\n" +
-			`  1. Create ${CONFIG_PATH} with { "parallelApiKey": "your-key" }\n` +
+			`  1. Create ${configPath()} with { "parallelApiKey": "your-key" }\n` +
 			"  2. Set PARALLEL_API_KEY environment variable\n" +
 			"Get a key at https://platform.parallel.ai",
 		);

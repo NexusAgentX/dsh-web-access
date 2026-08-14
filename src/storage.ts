@@ -1,4 +1,4 @@
-import { closeSync, constants, fchmodSync, fstatSync, fsyncSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, type Stats, unlinkSync, writeFileSync } from "node:fs";
+import { closeSync, constants, existsSync, fchmodSync, fstatSync, fsyncSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, type Stats, unlinkSync, writeFileSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import { join } from "node:path";
 import type { ExtensionContext } from "./host.ts";
@@ -67,6 +67,61 @@ export interface StoredSearchData {
 }
 
 const storedResults = new Map<string, StoredSearchData>();
+const SESSION_DIR = "web-search-sessions";
+let activeSessionId = "global";
+let sessionBound = false;
+
+function safeSessionId(id: string): string {
+	const cleaned = id.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 80);
+	return cleaned.length > 0 ? cleaned : "global";
+}
+
+function sessionIndexPath(id = activeSessionId): string {
+	return join(getWebSearchConfigDir(), SESSION_DIR, `${id}.json`);
+}
+
+function persistSessionIndex(): void {
+	if (!sessionBound) return;
+	try {
+		const dir = join(getWebSearchConfigDir(), SESSION_DIR);
+		mkdirSync(dir, { recursive: true });
+		const items = Array.from(storedResults.values()).filter(item => Date.now() - item.timestamp < CACHE_TTL_MS);
+		writeFileSync(sessionIndexPath(), `${JSON.stringify({ version: 1, items })}\n`);
+	} catch {}
+}
+
+function loadSessionIndex(): void {
+	storedResults.clear();
+	try {
+		const path = sessionIndexPath();
+		if (!existsSync(path)) return;
+		const parsed = JSON.parse(readFileSync(path, "utf8")) as { items?: unknown };
+		const items = Array.isArray(parsed.items) ? parsed.items : [];
+		const now = Date.now();
+		for (const item of items) {
+			if (isValidStoredData(item) && now - item.timestamp < CACHE_TTL_MS) {
+				storedResults.set(item.id, item);
+			}
+		}
+	} catch {}
+}
+
+export function setActiveSession(id: string | undefined | null): string {
+	sessionBound = true;
+	const next = safeSessionId(typeof id === "string" && id.trim() ? id.trim() : "global");
+	if (next === activeSessionId) {
+		if (storedResults.size === 0) loadSessionIndex();
+		return activeSessionId;
+	}
+	persistSessionIndex();
+	activeSessionId = next;
+	loadSessionIndex();
+	return activeSessionId;
+}
+
+export function getActiveSession(): string {
+	return activeSessionId;
+}
 
 export function generateId(): string {
 	return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
@@ -433,6 +488,7 @@ export function pruneExpiredFetchCache(now = Date.now(), requestedLimits?: Parti
 
 export function storeResult(id: string, data: StoredSearchData): void {
 	storedResults.set(id, data);
+	persistSessionIndex();
 }
 
 export function storeFetchedContentResult(id: string, data: StoredSearchData & { type: "fetch"; urls: ExtractedContent[] }): StoredSearchData {
@@ -444,6 +500,7 @@ export function storeFetchedContentResult(id: string, data: StoredSearchData & {
 		cacheError = cacheWriteError(err);
 	}
 	storedResults.set(id, ref ? { ...data, fetchCache: ref, urlMetadata: metadataForUrls(data.urls) } : { ...data, fetchCacheError: cacheError });
+	persistSessionIndex();
 	return createFetchSessionData(data, ref, cacheError);
 }
 
@@ -478,6 +535,7 @@ export function deleteResult(id: string): boolean {
 
 export function clearResults(): void {
 	storedResults.clear();
+	persistSessionIndex();
 }
 
 function isValidStoredData(data: unknown): data is StoredSearchData {

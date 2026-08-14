@@ -3,33 +3,36 @@ import { activityMonitor } from "./activity.ts";
 import type { SearchOptions, SearchResponse } from "./perplexity.ts";
 import { hasCredentialSource, redactCredential, resolveCredential } from "./credential-source.ts";
 import { getWebSearchConfigPath } from "./utils.ts";
+import { providerConfigEpoch } from "./provider-config-epoch.ts";
 
 const BOCHA_SEARCH_URL = "https://api.bochaai.com/v1/web-search";
-const CONFIG_PATH = getWebSearchConfigPath();
+function configPath(): string { return getWebSearchConfigPath(); }
 const SEARCH_TIMEOUT_MS = 60_000;
 
 interface WebSearchConfig {
 	bochaApiKey?: unknown;
 }
 
+let cachedConfigEpoch = -1;
 let cachedConfig: WebSearchConfig | null = null;
 
 function loadConfig(): WebSearchConfig {
-	if (cachedConfig) return cachedConfig;
-	if (!existsSync(CONFIG_PATH)) {
+	if (cachedConfig && cachedConfigEpoch === providerConfigEpoch()) return cachedConfig;
+	cachedConfigEpoch = providerConfigEpoch();
+	if (!existsSync(configPath())) {
 		cachedConfig = {};
 		return cachedConfig;
 	}
-	const raw = readFileSync(CONFIG_PATH, "utf-8");
+	const raw = readFileSync(configPath(), "utf-8");
 	let parsed: unknown;
 	try {
 		parsed = JSON.parse(raw);
 	} catch (err) {
 		const message = err instanceof Error ? err.message : String(err);
-		throw new Error(`Failed to parse ${CONFIG_PATH}: ${message}`);
+		throw new Error(`Failed to parse ${configPath()}: ${message}`);
 	}
 	if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-		throw new Error(`Invalid config in ${CONFIG_PATH}: expected a JSON object`);
+		throw new Error(`Invalid config in ${configPath()}: expected a JSON object`);
 	}
 	cachedConfig = parsed as WebSearchConfig;
 	return cachedConfig;
@@ -49,7 +52,7 @@ async function requireApiKey(signal?: AbortSignal): Promise<string> {
 	if (!apiKey) {
 		throw new Error(
 			"Bocha API key not found. Either:\n" +
-			`  1. Create ${CONFIG_PATH} with { "bochaApiKey": "your-key" }\n` +
+			`  1. Create ${configPath()} with { "bochaApiKey": "your-key" }\n` +
 			"  2. Set BOCHA_API_KEY environment variable\n" +
 			"Create a key at https://open.bochaai.com/",
 		);

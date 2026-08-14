@@ -1,4 +1,5 @@
 import { loadConfig, loadConfigSafe, resetConfigCache, saveConfig } from './config.ts'
+import { invalidateProviderConfigs } from './provider-config-epoch.ts'
 
 const KEY_FIELDS = [
   'openaiApiKey', 'braveApiKey', 'exaApiKey', 'tavilyApiKey', 'jinaApiKey',
@@ -48,6 +49,7 @@ export function applyPublicConfig(updates: Record<string, unknown>): Record<stri
   }
   saveConfig(next)
   resetConfigCache()
+  invalidateProviderConfigs()
   loadConfig()
   const published = getPublicConfig()
   for (const listener of listeners) {

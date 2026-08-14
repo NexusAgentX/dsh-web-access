@@ -3,9 +3,10 @@ import { activityMonitor } from "./activity.ts";
 import type { SearchOptions, SearchResponse } from "./perplexity.ts";
 import { hasCredentialSource, redactCredential, resolveCredential } from "./credential-source.ts";
 import { getWebSearchConfigPath } from "./utils.ts";
+import { providerConfigEpoch } from "./provider-config-epoch.ts";
 
 const BRIGHTDATA_API_URL = "https://api.brightdata.com/request";
-const CONFIG_PATH = getWebSearchConfigPath();
+function configPath(): string { return getWebSearchConfigPath(); }
 const SEARCH_TIMEOUT_MS = 60_000;
 
 // Bright Data proxies a real Google SERP through a provisioned "zone" and bills
@@ -48,6 +49,7 @@ interface BrightDataSearchOptions extends SearchOptions {
 	includeContent?: boolean;
 }
 
+let cachedConfigEpoch = -1;
 let cachedConfig: WebSearchConfig | null = null;
 
 // `web-search.json` is a credential store: its own text is the secret. V8 quotes a
@@ -70,21 +72,22 @@ function configParseDetail(err: unknown): string {
 }
 
 function loadConfig(): WebSearchConfig {
-	if (cachedConfig) return cachedConfig;
-	if (!existsSync(CONFIG_PATH)) {
+	if (cachedConfig && cachedConfigEpoch === providerConfigEpoch()) return cachedConfig;
+	cachedConfigEpoch = providerConfigEpoch();
+	if (!existsSync(configPath())) {
 		cachedConfig = {};
 		return cachedConfig;
 	}
 
-	const raw = readFileSync(CONFIG_PATH, "utf-8");
+	const raw = readFileSync(configPath(), "utf-8");
 	let parsed: unknown;
 	try {
 		parsed = JSON.parse(raw);
 	} catch (err) {
-		throw new Error(`Failed to parse ${CONFIG_PATH}: ${configParseDetail(err)}`);
+		throw new Error(`Failed to parse ${configPath()}: ${configParseDetail(err)}`);
 	}
 	if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-		throw new Error(`Invalid config in ${CONFIG_PATH}: expected a JSON object`);
+		throw new Error(`Invalid config in ${configPath()}: expected a JSON object`);
 	}
 	cachedConfig = parsed as WebSearchConfig;
 	return cachedConfig;
@@ -104,7 +107,7 @@ async function requireApiKey(signal?: AbortSignal): Promise<string> {
 	if (!apiKey) {
 		throw new Error(
 			"Bright Data API key not found. Either:\n" +
-			`  1. Create ${CONFIG_PATH} with { "brightdataApiKey": "your-key" }\n` +
+			`  1. Create ${configPath()} with { "brightdataApiKey": "your-key" }\n` +
 			"  2. Set BRIGHTDATA_API_KEY environment variable\n" +
 			"Get a key at https://brightdata.com/cp/setting/users",
 		);
@@ -146,7 +149,7 @@ function serpZoneSetting(): ZoneSetting | null {
 	}
 	const configured = loadConfig().brightdataSerpZone;
 	if (typeof configured === "string" && configured.trim()) {
-		return { raw: configured.trim(), label: `brightdataSerpZone in ${CONFIG_PATH}` };
+		return { raw: configured.trim(), label: `brightdataSerpZone in ${configPath()}` };
 	}
 	return null;
 }
@@ -175,7 +178,7 @@ function requireSerpZone(): string {
 	}
 	throw new Error(
 		"Bright Data SERP zone is invalid or missing. Either:\n" +
-		`  1. Create ${CONFIG_PATH} with { "brightdataSerpZone": "your_serp_zone" }\n` +
+		`  1. Create ${configPath()} with { "brightdataSerpZone": "your_serp_zone" }\n` +
 		"  2. Set BRIGHTDATA_SERP_ZONE environment variable\n" +
 		"The zone must be of Bright Data type `serp`; a Web Unlocker zone is a different product and does not return SERP JSON.\n" +
 		"Create one at https://brightdata.com/cp/zones",

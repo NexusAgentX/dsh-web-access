@@ -5,10 +5,11 @@ import type { SearchOptions, SearchResponse } from "./perplexity.ts";
 import { hasCredentialSource, redactCredential, resolveCredential } from "./credential-source.ts";
 import { fetchRemoteUrl, loadFetchContentDomainPolicy, loadSsrfConfig, validateRemoteUrl, type SsrfConfig } from "./ssrf-protection.ts";
 import { getWebSearchConfigPath } from "./utils.ts";
+import { providerConfigEpoch } from "./provider-config-epoch.ts";
 
 const OLLAMA_SEARCH_URL = "https://ollama.com/api/web_search";
 const OLLAMA_FETCH_URL = "https://ollama.com/api/web_fetch";
-const CONFIG_PATH = getWebSearchConfigPath();
+function configPath(): string { return getWebSearchConfigPath(); }
 const SEARCH_TIMEOUT_MS = 60_000;
 
 interface WebSearchConfig {
@@ -39,25 +40,27 @@ export interface OllamaExtractOptions extends Pick<ExtractOptions, "timeoutMs" |
 	ssrf?: SsrfConfig;
 }
 
+let cachedConfigEpoch = -1;
 let cachedConfig: WebSearchConfig | null = null;
 
 function loadConfig(): WebSearchConfig {
-	if (cachedConfig) return cachedConfig;
-	if (!existsSync(CONFIG_PATH)) {
+	if (cachedConfig && cachedConfigEpoch === providerConfigEpoch()) return cachedConfig;
+	cachedConfigEpoch = providerConfigEpoch();
+	if (!existsSync(configPath())) {
 		cachedConfig = {};
 		return cachedConfig;
 	}
 
-	const raw = readFileSync(CONFIG_PATH, "utf-8");
+	const raw = readFileSync(configPath(), "utf-8");
 	let parsed: unknown;
 	try {
 		parsed = JSON.parse(raw);
 	} catch (err) {
 		const message = err instanceof Error ? err.message : String(err);
-		throw new Error(`Failed to parse ${CONFIG_PATH}: ${message}`);
+		throw new Error(`Failed to parse ${configPath()}: ${message}`);
 	}
 	if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-		throw new Error(`Invalid config in ${CONFIG_PATH}: expected a JSON object`);
+		throw new Error(`Invalid config in ${configPath()}: expected a JSON object`);
 	}
 	cachedConfig = parsed as WebSearchConfig;
 	return cachedConfig;
@@ -77,7 +80,7 @@ async function requireApiKey(signal?: AbortSignal): Promise<string> {
 	if (!apiKey) {
 		throw new Error(
 			"Ollama API key not found. Either:\n" +
-			`  1. Create ${CONFIG_PATH} with { "ollamaApiKey": "your-key" }\n` +
+			`  1. Create ${configPath()} with { "ollamaApiKey": "your-key" }\n` +
 			"  2. Set OLLAMA_API_KEY environment variable\n" +
 			"Create a key at https://ollama.com/settings/keys",
 		);

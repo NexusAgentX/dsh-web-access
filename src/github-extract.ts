@@ -5,8 +5,9 @@ import { activityMonitor } from "./activity.ts";
 import type { ExtractedContent } from "./extract.ts";
 import { checkGhAvailable, checkRepoSize, fetchViaApi, showGhHint } from "./github-api.ts";
 import { getWebSearchConfigPath } from "./utils.ts";
+import { providerConfigEpoch } from "./provider-config-epoch.ts";
 
-const CONFIG_PATH = getWebSearchConfigPath();
+function configPath(): string { return getWebSearchConfigPath(); }
 
 const BINARY_EXTENSIONS = new Set([
 	".png", ".jpg", ".jpeg", ".gif", ".bmp", ".ico", ".webp", ".svg", ".tiff", ".tif",
@@ -52,6 +53,7 @@ interface GitHubCloneConfig {
 
 const cloneCache = new Map<string, CachedClone>();
 
+let cachedConfigEpoch = -1;
 let cachedConfig: GitHubCloneConfig | null = null;
 
 function normalizeEnabled(value: unknown, fallback: boolean): boolean {
@@ -84,7 +86,8 @@ function normalizeClonePath(value: unknown, fallback: string): string {
 }
 
 function loadGitHubConfig(): GitHubCloneConfig {
-	if (cachedConfig) return cachedConfig;
+	if (cachedConfig && cachedConfigEpoch === providerConfigEpoch()) return cachedConfig;
+	cachedConfigEpoch = providerConfigEpoch();
 
 	const defaults: GitHubCloneConfig = {
 		enabled: true,
@@ -93,18 +96,18 @@ function loadGitHubConfig(): GitHubCloneConfig {
 		clonePath: "/tmp/pi-github-repos",
 	};
 
-	if (!existsSync(CONFIG_PATH)) {
+	if (!existsSync(configPath())) {
 		cachedConfig = defaults;
 		return cachedConfig;
 	}
 
-	const rawText = readFileSync(CONFIG_PATH, "utf-8");
+	const rawText = readFileSync(configPath(), "utf-8");
 	let raw: { githubClone?: { enabled?: unknown; maxRepoSizeMB?: unknown; cloneTimeoutSeconds?: unknown; clonePath?: unknown } };
 	try {
 		raw = JSON.parse(rawText) as { githubClone?: { enabled?: unknown; maxRepoSizeMB?: unknown; cloneTimeoutSeconds?: unknown; clonePath?: unknown } };
 	} catch (err) {
 		const message = err instanceof Error ? err.message : String(err);
-		throw new Error(`Failed to parse ${CONFIG_PATH}: ${message}`);
+		throw new Error(`Failed to parse ${configPath()}: ${message}`);
 	}
 
 	const gc = raw.githubClone ?? {};

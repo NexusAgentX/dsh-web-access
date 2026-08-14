@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Session-scoped search/fetch cache that restores from disk when the same dsh session comes back.
+- Saving keys in the Web UI invalidates provider caches so new credentials work without restart.
+
 ## [0.2.0] - 2026-08-14
 
 ### Added

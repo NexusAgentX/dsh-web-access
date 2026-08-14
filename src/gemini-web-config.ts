@@ -1,13 +1,15 @@
 import { existsSync, readFileSync } from "node:fs";
 import { getWebSearchConfigPath } from "./utils.ts";
+import { providerConfigEpoch } from "./provider-config-epoch.ts";
 
-const CONFIG_PATH = getWebSearchConfigPath();
+function configPath(): string { return getWebSearchConfigPath(); }
 
 interface GeminiWebConfig {
 	chromeProfile?: string;
 	allowBrowserCookies?: boolean;
 }
 
+let cachedConfigEpoch = -1;
 let cachedConfig: GeminiWebConfig | null = null;
 
 export function normalizeChromeProfile(value: unknown): string | undefined {
@@ -17,19 +19,20 @@ export function normalizeChromeProfile(value: unknown): string | undefined {
 }
 
 function loadConfig(): GeminiWebConfig {
-	if (cachedConfig) return cachedConfig;
-	if (!existsSync(CONFIG_PATH)) {
+	if (cachedConfig && cachedConfigEpoch === providerConfigEpoch()) return cachedConfig;
+	cachedConfigEpoch = providerConfigEpoch();
+	if (!existsSync(configPath())) {
 		cachedConfig = {};
 		return cachedConfig;
 	}
 
-	const rawText = readFileSync(CONFIG_PATH, "utf-8");
+	const rawText = readFileSync(configPath(), "utf-8");
 	let raw: { chromeProfile?: unknown; allowBrowserCookies?: unknown };
 	try {
 		raw = JSON.parse(rawText) as { chromeProfile?: unknown; allowBrowserCookies?: unknown };
 	} catch (err) {
 		const message = err instanceof Error ? err.message : String(err);
-		throw new Error(`Failed to parse ${CONFIG_PATH}: ${message}`);
+		throw new Error(`Failed to parse ${configPath()}: ${message}`);
 	}
 
 	cachedConfig = {

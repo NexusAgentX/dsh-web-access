@@ -3,9 +3,10 @@ import { activityMonitor } from "./activity.ts";
 import type { ExtractedContent } from "./extract.ts";
 import { hasCredentialSource, redactCredential, resolveCredential } from "./credential-source.ts";
 import { getWebSearchConfigPath } from "./utils.ts";
+import { providerConfigEpoch } from "./provider-config-epoch.ts";
 
 const PERPLEXITY_API_URL = "https://api.perplexity.ai/chat/completions";
-const CONFIG_PATH = getWebSearchConfigPath();
+function configPath(): string { return getWebSearchConfigPath(); }
 
 const RATE_LIMIT = {
 	maxRequests: 10,
@@ -37,22 +38,24 @@ interface WebSearchConfig {
 	perplexityApiKey?: unknown;
 }
 
+let cachedConfigEpoch = -1;
 let cachedConfig: WebSearchConfig | null = null;
 
 function loadConfig(): WebSearchConfig {
-	if (cachedConfig) return cachedConfig;
-	if (!existsSync(CONFIG_PATH)) {
+	if (cachedConfig && cachedConfigEpoch === providerConfigEpoch()) return cachedConfig;
+	cachedConfigEpoch = providerConfigEpoch();
+	if (!existsSync(configPath())) {
 		cachedConfig = {};
 		return cachedConfig;
 	}
 
-	const content = readFileSync(CONFIG_PATH, "utf-8");
+	const content = readFileSync(configPath(), "utf-8");
 	try {
 		cachedConfig = JSON.parse(content) as WebSearchConfig;
 		return cachedConfig;
 	} catch (err) {
 		const message = err instanceof Error ? err.message : String(err);
-		throw new Error(`Failed to parse ${CONFIG_PATH}: ${message}`);
+		throw new Error(`Failed to parse ${configPath()}: ${message}`);
 	}
 }
 
@@ -66,7 +69,7 @@ async function getApiKey(signal?: AbortSignal): Promise<string> {
 	if (!key) {
 		throw new Error(
 			"Perplexity API key not found. Either:\n" +
-			`  1. Create ${CONFIG_PATH} with { "perplexityApiKey": "your-key" }\n` +
+			`  1. Create ${configPath()} with { "perplexityApiKey": "your-key" }\n` +
 			"  2. Set PERPLEXITY_API_KEY environment variable\n" +
 			"Get a key at https://perplexity.ai/settings/api"
 		);

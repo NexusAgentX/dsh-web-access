@@ -7,6 +7,7 @@ import {
   formatStoredResults,
   type Engine,
 } from './engine.ts'
+import { setActiveSession } from './storage.ts'
 import { getActiveGoogleEmail, isGeminiWebAvailable } from './gemini-web.ts'
 
 export function registerCommands(ctx: Context, engine: Engine): void {
@@ -20,6 +21,7 @@ export function registerCommands(ctx: Context, engine: Engine): void {
       description: 'Run a web search, optionally opening the curator',
       input: { hint: '[query, query, ...]' },
       async handler(invocation) {
+        setActiveSession(typeof invocation.agent.session?.id === 'string' ? invocation.agent.session.id : undefined)
         const queries = normalizeQueryList(invocation.rawInput.split(','))
         if (queries.length === 0) {
           return { kind: 'success', text: 'Usage: /websearch query one, query two' }
@@ -74,7 +76,8 @@ export function registerCommands(ctx: Context, engine: Engine): void {
     commands.register({
       name: 'search',
       description: 'List stored search and fetch results',
-      handler() {
+      handler(invocation) {
+        setActiveSession(typeof invocation.agent.session?.id === 'string' ? invocation.agent.session.id : undefined)
         return { kind: 'success', text: formatStoredResults() }
       },
     })

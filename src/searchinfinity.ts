@@ -3,9 +3,10 @@ import { activityMonitor } from "./activity.ts";
 import { hasCredentialSource, redactCredential, resolveCredential } from "./credential-source.ts";
 import type { SearchOptions, SearchResponse } from "./perplexity.ts";
 import { getWebSearchConfigPath } from "./utils.ts";
+import { providerConfigEpoch } from "./provider-config-epoch.ts";
 
 const SEARCHINFINITY_SEARCH_URL = "https://torchlight.byteintlapi.com/search_api/web_search";
-const CONFIG_PATH = getWebSearchConfigPath();
+function configPath(): string { return getWebSearchConfigPath(); }
 // API Key authenticated requests time out server-side after 30 seconds.
 const SEARCH_TIMEOUT_MS = 30_000;
 
@@ -50,25 +51,27 @@ interface SearchinfinitySearchOptions extends SearchOptions {
 	includeContent?: boolean;
 }
 
+let cachedConfigEpoch = -1;
 let cachedConfig: WebSearchConfig | null = null;
 
 function loadConfig(): WebSearchConfig {
-	if (cachedConfig) return cachedConfig;
-	if (!existsSync(CONFIG_PATH)) {
+	if (cachedConfig && cachedConfigEpoch === providerConfigEpoch()) return cachedConfig;
+	cachedConfigEpoch = providerConfigEpoch();
+	if (!existsSync(configPath())) {
 		cachedConfig = {};
 		return cachedConfig;
 	}
 
-	const raw = readFileSync(CONFIG_PATH, "utf-8");
+	const raw = readFileSync(configPath(), "utf-8");
 	let parsed: unknown;
 	try {
 		parsed = JSON.parse(raw);
 	} catch (err) {
 		const message = err instanceof Error ? err.message : String(err);
-		throw new Error(`Failed to parse ${CONFIG_PATH}: ${message}`);
+		throw new Error(`Failed to parse ${configPath()}: ${message}`);
 	}
 	if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-		throw new Error(`Invalid config in ${CONFIG_PATH}: expected a JSON object`);
+		throw new Error(`Invalid config in ${configPath()}: expected a JSON object`);
 	}
 	cachedConfig = parsed as WebSearchConfig;
 	return cachedConfig;
@@ -84,7 +87,7 @@ async function getApiKey(signal?: AbortSignal): Promise<string> {
 	if (!key) {
 		throw new Error(
 			"Searchinfinity API key not found. Either:\n" +
-			`  1. Create ${CONFIG_PATH} with { "searchinfinityApiKey": "your-key" }\n` +
+			`  1. Create ${configPath()} with { "searchinfinityApiKey": "your-key" }\n` +
 			"  2. Set SEARCHINFINITY_API_KEY environment variable\n" +
 			"Create a key at https://console.byteplus.com/search-infinity/api-key",
 		);

@@ -5,6 +5,7 @@ import {
 	redactCredential,
 } from "./credential-source.ts";
 import { getWebSearchConfigPath } from "./utils.ts";
+import { providerConfigEpoch } from "./provider-config-epoch.ts";
 
 const DEFAULT_API_HOST = "https://www.datalab.to";
 const API_PREFIX = "/api/v1";
@@ -13,7 +14,7 @@ const DEFAULT_POLL_INTERVAL_MS = 1_500;
 const MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
 const MAX_ERROR_BODY_BYTES = 300;
 const CLEANUP_TIMEOUT_MS = 5_000;
-const CONFIG_PATH = getWebSearchConfigPath();
+function configPath(): string { return getWebSearchConfigPath(); }
 
 export type DatalabMode = "fast" | "balanced" | "accurate";
 export type DatalabProcessingLocation = "eu" | "us";
@@ -35,22 +36,24 @@ interface DatalabConfig {
 	datalabApiKey?: unknown;
 }
 
+let cachedConfigEpoch = -1;
 let cachedConfig: DatalabConfig | null = null;
 
 function loadConfig(): DatalabConfig {
-	if (cachedConfig) return cachedConfig;
-	if (!existsSync(CONFIG_PATH)) {
+	if (cachedConfig && cachedConfigEpoch === providerConfigEpoch()) return cachedConfig;
+	cachedConfigEpoch = providerConfigEpoch();
+	if (!existsSync(configPath())) {
 		cachedConfig = {};
 		return cachedConfig;
 	}
 
-	const rawText = readFileSync(CONFIG_PATH, "utf-8");
+	const rawText = readFileSync(configPath(), "utf-8");
 	try {
 		cachedConfig = JSON.parse(rawText) as DatalabConfig;
 		return cachedConfig;
 	} catch (err) {
 		const message = err instanceof Error ? err.message : String(err);
-		throw new Error(`Failed to parse ${CONFIG_PATH}: ${message}`);
+		throw new Error(`Failed to parse ${configPath()}: ${message}`);
 	}
 }
 

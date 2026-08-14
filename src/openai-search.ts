@@ -4,10 +4,11 @@ import { activityMonitor } from "./activity.ts";
 import type { SearchOptions, SearchResponse, SearchResult } from "./perplexity.ts";
 import { hasCredentialSource, redactCredential, resolveCredential } from "./credential-source.ts";
 import { getWebSearchConfigPath } from "./utils.ts";
+import { providerConfigEpoch } from "./provider-config-epoch.ts";
 
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 const CODEX_RESPONSES_URL = "https://chatgpt.com/backend-api/codex/responses";
-const CONFIG_PATH = getWebSearchConfigPath();
+function configPath(): string { return getWebSearchConfigPath(); }
 const SEARCH_TIMEOUT_MS = 60_000;
 
 // The selected model runs the server-side web_search call and writes the cited summary.
@@ -53,22 +54,24 @@ interface NormalizedDomainFilters {
 	blockedDomains?: string[];
 }
 
+let cachedConfigEpoch = -1;
 let cachedConfig: WebSearchConfig | null = null;
 
 function loadConfig(): WebSearchConfig {
-	if (cachedConfig) return cachedConfig;
-	if (!existsSync(CONFIG_PATH)) {
+	if (cachedConfig && cachedConfigEpoch === providerConfigEpoch()) return cachedConfig;
+	cachedConfigEpoch = providerConfigEpoch();
+	if (!existsSync(configPath())) {
 		cachedConfig = {};
 		return cachedConfig;
 	}
 
-	const raw = readFileSync(CONFIG_PATH, "utf-8");
+	const raw = readFileSync(configPath(), "utf-8");
 	try {
 		cachedConfig = JSON.parse(raw) as WebSearchConfig;
 		return cachedConfig;
 	} catch (err) {
 		const message = err instanceof Error ? err.message : String(err);
-		throw new Error(`Failed to parse ${CONFIG_PATH}: ${message}`);
+		throw new Error(`Failed to parse ${configPath()}: ${message}`);
 	}
 }
 
@@ -135,16 +138,16 @@ function extractAccountId(token: string): string | undefined {
 function resolveConfiguredResponsesUrl(value: unknown): string {
 	if (value === undefined) return OPENAI_RESPONSES_URL;
 	if (typeof value !== "string" || value.trim().length === 0) {
-		throw new Error(`openaiResponsesUrl in ${CONFIG_PATH} must be an absolute http(s) URL`);
+		throw new Error(`openaiResponsesUrl in ${configPath()} must be an absolute http(s) URL`);
 	}
 	let url: URL;
 	try {
 		url = new URL(value.trim());
 	} catch {
-		throw new Error(`openaiResponsesUrl in ${CONFIG_PATH} must be an absolute http(s) URL`);
+		throw new Error(`openaiResponsesUrl in ${configPath()} must be an absolute http(s) URL`);
 	}
 	if (url.protocol !== "https:" && url.protocol !== "http:") {
-		throw new Error(`openaiResponsesUrl in ${CONFIG_PATH} must use http or https`);
+		throw new Error(`openaiResponsesUrl in ${configPath()} must use http or https`);
 	}
 	return url.toString();
 }
@@ -152,7 +155,7 @@ function resolveConfiguredResponsesUrl(value: unknown): string {
 function resolveConfiguredSearchModel(value: unknown): string | undefined {
 	if (value == null) return undefined;
 	if (typeof value !== "string" || value.trim().length === 0) {
-		throw new Error(`openaiSearchModel in ${CONFIG_PATH} must be a non-empty string`);
+		throw new Error(`openaiSearchModel in ${configPath()} must be a non-empty string`);
 	}
 	return value.trim();
 }
@@ -410,7 +413,7 @@ export async function searchWithOpenAI(
 		throw new Error(
 			"OpenAI web search unavailable. Either:\n" +
 			"  1. Use /login to sign in with a Codex subscription\n" +
-			`  2. Create ${CONFIG_PATH} with { "openaiApiKey": "your-key" }\n` +
+			`  2. Create ${configPath()} with { "openaiApiKey": "your-key" }\n` +
 			"  3. Set OPENAI_API_KEY environment variable",
 		);
 	}

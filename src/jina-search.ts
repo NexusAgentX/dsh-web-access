@@ -4,9 +4,10 @@ import { hasCredentialSource, redactCredential, resolveCredential } from "./cred
 import type { ExtractedContent } from "./extract.ts";
 import type { SearchOptions, SearchResponse } from "./perplexity.ts";
 import { getWebSearchConfigPath } from "./utils.ts";
+import { providerConfigEpoch } from "./provider-config-epoch.ts";
 
 const JINA_SEARCH_BASE_URL = "https://s.jina.ai/";
-const CONFIG_PATH = getWebSearchConfigPath();
+function configPath(): string { return getWebSearchConfigPath(); }
 const SEARCH_TIMEOUT_MS = 60_000;
 
 interface WebSearchConfig {
@@ -29,16 +30,18 @@ interface JinaSearchOptions extends SearchOptions {
 	includeContent?: boolean;
 }
 
+let cachedConfigEpoch = -1;
 let cachedConfig: WebSearchConfig | null = null;
 
 function loadConfig(): WebSearchConfig {
-	if (cachedConfig) return cachedConfig;
-	if (!existsSync(CONFIG_PATH)) {
+	if (cachedConfig && cachedConfigEpoch === providerConfigEpoch()) return cachedConfig;
+	cachedConfigEpoch = providerConfigEpoch();
+	if (!existsSync(configPath())) {
 		cachedConfig = {};
 		return cachedConfig;
 	}
 
-	const raw = readFileSync(CONFIG_PATH, "utf8");
+	const raw = readFileSync(configPath(), "utf8");
 	try {
 		const parsed: unknown = JSON.parse(raw);
 		if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
@@ -48,7 +51,7 @@ function loadConfig(): WebSearchConfig {
 		return cachedConfig;
 	} catch (err) {
 		const message = err instanceof Error ? err.message : String(err);
-		throw new Error(`Failed to parse ${CONFIG_PATH}: ${message}`);
+		throw new Error(`Failed to parse ${configPath()}: ${message}`);
 	}
 }
 
@@ -66,7 +69,7 @@ async function requireApiKey(signal?: AbortSignal): Promise<string> {
 	if (!apiKey) {
 		throw new Error(
 			"Jina Search API key not found. Either:\n" +
-			`  1. Create ${CONFIG_PATH} with { "jinaApiKey": "your-key" }\n` +
+			`  1. Create ${configPath()} with { "jinaApiKey": "your-key" }\n` +
 			"  2. Set JINA_API_KEY environment variable\n" +
 			"Get a key at https://jina.ai/api-dashboard",
 		);

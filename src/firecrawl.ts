@@ -5,8 +5,9 @@ import type { ExtractedContent, ExtractOptions } from "./extract.ts";
 import type { SearchOptions, SearchResponse } from "./perplexity.ts";
 import { loadSsrfConfig, validateRemoteUrl, type Lookup } from "./ssrf-protection.ts";
 import { getWebSearchConfigPath } from "./utils.ts";
+import { providerConfigEpoch } from "./provider-config-epoch.ts";
 
-const CONFIG_PATH = getWebSearchConfigPath();
+function configPath(): string { return getWebSearchConfigPath(); }
 const DEFAULT_API_VERSION = "v2";
 const EXTRACT_TIMEOUT_MS = 60_000;
 const SEARCH_TIMEOUT_MS = 60_000;
@@ -61,24 +62,26 @@ interface DomainFilters {
 	exclude: string[];
 }
 
+let cachedConfigEpoch = -1;
 let cachedConfig: FirecrawlConfig | null = null;
 
 function loadConfig(): FirecrawlConfig {
-	if (cachedConfig) return cachedConfig;
-	if (!existsSync(CONFIG_PATH)) {
+	if (cachedConfig && cachedConfigEpoch === providerConfigEpoch()) return cachedConfig;
+	cachedConfigEpoch = providerConfigEpoch();
+	if (!existsSync(configPath())) {
 		cachedConfig = {};
 		return cachedConfig;
 	}
-	const raw = readFileSync(CONFIG_PATH, "utf8");
+	const raw = readFileSync(configPath(), "utf8");
 	let parsed: unknown;
 	try {
 		parsed = JSON.parse(raw);
 	} catch (err) {
 		const message = err instanceof Error ? err.message : String(err);
-		throw new Error(`Failed to parse ${CONFIG_PATH}: ${message}`);
+		throw new Error(`Failed to parse ${configPath()}: ${message}`);
 	}
 	if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-		throw new Error(`Invalid config in ${CONFIG_PATH}: expected a JSON object`);
+		throw new Error(`Invalid config in ${configPath()}: expected a JSON object`);
 	}
 	cachedConfig = parsed as FirecrawlConfig;
 	return cachedConfig;
@@ -96,13 +99,13 @@ function normalizeBaseUrl(value: unknown): string | null {
 	try {
 		parsed = new URL(trimmed);
 	} catch {
-		throw new Error(`Invalid Firecrawl base URL in ${CONFIG_PATH}: expected an HTTP or HTTPS URL`);
+		throw new Error(`Invalid Firecrawl base URL in ${configPath()}: expected an HTTP or HTTPS URL`);
 	}
 	if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-		throw new Error(`Invalid Firecrawl base URL in ${CONFIG_PATH}: expected an HTTP or HTTPS URL`);
+		throw new Error(`Invalid Firecrawl base URL in ${configPath()}: expected an HTTP or HTTPS URL`);
 	}
 	if (parsed.username || parsed.password) {
-		throw new Error(`Invalid Firecrawl base URL in ${CONFIG_PATH}: URL credentials are not allowed`);
+		throw new Error(`Invalid Firecrawl base URL in ${configPath()}: URL credentials are not allowed`);
 	}
 	parsed.pathname = parsed.pathname.replace(/\/+$/, "");
 	parsed.search = "";
@@ -119,7 +122,7 @@ function requireBaseUrl(): string {
 	if (!baseUrl) {
 		throw new Error(
 			"Firecrawl base URL not configured. Either:\n" +
-			`  1. Set firecrawlBaseUrl in ${CONFIG_PATH}\n` +
+			`  1. Set firecrawlBaseUrl in ${configPath()}\n` +
 			"  2. Set FIRECRAWL_BASE_URL environment variable",
 		);
 	}
@@ -133,7 +136,7 @@ function getApiVersion(): FirecrawlApiVersion {
 	const raw = environmentValue || loadConfig().firecrawlApiVersion;
 	if (raw === undefined || raw === null) return DEFAULT_API_VERSION;
 	if (typeof raw !== "string") {
-		throw new Error(`firecrawlApiVersion in ${CONFIG_PATH} must be a string ("v1" or "v2")`);
+		throw new Error(`firecrawlApiVersion in ${configPath()} must be a string ("v1" or "v2")`);
 	}
 	const normalized = raw.trim().toLowerCase();
 	if (!normalized) return DEFAULT_API_VERSION;
@@ -148,7 +151,7 @@ function allowFreshScrape(): boolean {
 	if (environmentValue !== undefined) return environmentValue === "1" || environmentValue.toLowerCase() === "true";
 	const configured = loadConfig().firecrawlFreshScrape;
 	if (configured === undefined || configured === null) return false;
-	if (typeof configured !== "boolean") throw new Error(`firecrawlFreshScrape in ${CONFIG_PATH} must be a boolean`);
+	if (typeof configured !== "boolean") throw new Error(`firecrawlFreshScrape in ${configPath()} must be a boolean`);
 	return configured;
 }
 

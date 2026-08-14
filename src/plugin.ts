@@ -19,6 +19,7 @@ import { createHostContext } from './host.ts'
 import { registerWebUi } from './http-ui.ts'
 import { bindHarnessLlm } from './llm-bridge.ts'
 import { fetchMetaFromDetails, presentFetchResult, presentSearchResult, searchMetaFromDetails } from './presentation.ts'
+import { setActiveSession } from './storage.ts'
 import { registerWebProviders } from './web-providers.ts'
 
 export const name = 'dsh-web-access'
@@ -85,6 +86,7 @@ export function apply(ctx: Context, config: Config = {}): void {
         return presentSearchResult(args, result)
       },
       async execute(args, exec) {
+        bindSession(exec.agent)
         engine.hooks.injectNotice = text => injectNotice(exec.agent, text)
         return asJson(await executeWebSearch(engine, args, exec.signal))
       },
@@ -120,6 +122,7 @@ export function apply(ctx: Context, config: Config = {}): void {
         return presentFetchResult(args, result)
       },
       async execute(args, exec) {
+        bindSession(exec.agent)
         engine.hooks.injectNotice = text => injectNotice(exec.agent, text)
         return asJson(await executeFetchContent(engine, args, exec.signal))
       },
@@ -145,7 +148,8 @@ export function apply(ctx: Context, config: Config = {}): void {
       presentCall(args) {
         return { card: 'generic', title: `get ${args.responseId}`, kind: 'read' }
       },
-      async execute(args) {
+      async execute(args, exec) {
+        bindSession(exec.agent)
         return asJson(executeGetSearchContent(engine, args))
       },
     }))
@@ -169,6 +173,7 @@ export function apply(ctx: Context, config: Config = {}): void {
         return { card: 'generic', title: `source_check ${args.claim.slice(0, 48)}`, kind: 'search' }
       },
       async execute(args, exec) {
+        bindSession(exec.agent)
         return asJson(await executeSourceCheck(engine, args, exec.signal))
       },
     }))
@@ -195,6 +200,11 @@ const jsonTextOutput = {
   render(_args: unknown, value: { text: string }) {
     return [{ type: 'text' as const, text: value.text }]
   },
+}
+
+function bindSession(agent: { session?: { id?: unknown } } | undefined): void {
+  const id = agent?.session && typeof agent.session.id === 'string' ? agent.session.id : undefined
+  setActiveSession(id)
 }
 
 function asJson(result: { text: string; details: Record<string, unknown> }) {

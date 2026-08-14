@@ -4,8 +4,9 @@ import { hasCredentialSource, redactCredential, resolveCredential } from "./cred
 import type { ExtractedContent, ExtractOptions } from "./extract.ts";
 import { validateRemoteUrl, type Lookup } from "./ssrf-protection.ts";
 import { getWebSearchConfigPath } from "./utils.ts";
+import { providerConfigEpoch } from "./provider-config-epoch.ts";
 
-const CONFIG_PATH = getWebSearchConfigPath();
+function configPath(): string { return getWebSearchConfigPath(); }
 const BRIGHTDATA_REQUEST_URL = "https://api.brightdata.com/request";
 const EXTRACT_TIMEOUT_MS = 60_000;
 const DEFAULT_MAX_REDIRECTS = 5;
@@ -26,6 +27,7 @@ interface BrightDataConfig {
 	brightdataUnlockerZone?: unknown;
 }
 
+let cachedConfigEpoch = -1;
 let cachedConfig: BrightDataConfig | null = null;
 
 // V8's JSON.parse message quotes a slice of the source text around the offending
@@ -43,20 +45,21 @@ function parseFailureDetail(err: unknown): string {
 }
 
 function loadConfig(): BrightDataConfig {
-	if (cachedConfig) return cachedConfig;
-	if (!existsSync(CONFIG_PATH)) {
+	if (cachedConfig && cachedConfigEpoch === providerConfigEpoch()) return cachedConfig;
+	cachedConfigEpoch = providerConfigEpoch();
+	if (!existsSync(configPath())) {
 		cachedConfig = {};
 		return cachedConfig;
 	}
-	const raw = readFileSync(CONFIG_PATH, "utf8");
+	const raw = readFileSync(configPath(), "utf8");
 	let parsed: unknown;
 	try {
 		parsed = JSON.parse(raw);
 	} catch (err) {
-		throw new Error(`Failed to parse ${CONFIG_PATH}: ${parseFailureDetail(err)}`);
+		throw new Error(`Failed to parse ${configPath()}: ${parseFailureDetail(err)}`);
 	}
 	if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-		throw new Error(`Invalid config in ${CONFIG_PATH}: expected a JSON object`);
+		throw new Error(`Invalid config in ${configPath()}: expected a JSON object`);
 	}
 	cachedConfig = parsed as BrightDataConfig;
 	return cachedConfig;
@@ -82,7 +85,7 @@ function zoneSetting(): ZoneSetting | null {
 	const fromEnv = process.env.BRIGHTDATA_UNLOCKER_ZONE;
 	if (typeof fromEnv === "string" && fromEnv.trim()) return { raw: fromEnv.trim(), label: "BRIGHTDATA_UNLOCKER_ZONE" };
 	const configured = loadConfig().brightdataUnlockerZone;
-	if (typeof configured === "string" && configured.trim()) return { raw: configured.trim(), label: `brightdataUnlockerZone in ${CONFIG_PATH}` };
+	if (typeof configured === "string" && configured.trim()) return { raw: configured.trim(), label: `brightdataUnlockerZone in ${configPath()}` };
 	return null;
 }
 
@@ -107,7 +110,7 @@ function requireZone(): string {
 	}
 	throw new Error(
 		"Bright Data Web Unlocker zone not configured. Either:\n" +
-		`  1. Set brightdataUnlockerZone in ${CONFIG_PATH}\n` +
+		`  1. Set brightdataUnlockerZone in ${configPath()}\n` +
 		"  2. Set BRIGHTDATA_UNLOCKER_ZONE environment variable\n" +
 		"The zone must be of type \"unblocker\"; a SERP zone will not serve Web Unlocker requests.",
 	);
@@ -123,7 +126,7 @@ async function getApiKey(signal?: AbortSignal): Promise<string> {
 	if (!apiKey) {
 		throw new Error(
 			"Bright Data API key not found. Either:\n" +
-			`  1. Create ${CONFIG_PATH} with { "brightdataApiKey": "your-key" }\n` +
+			`  1. Create ${configPath()} with { "brightdataApiKey": "your-key" }\n` +
 			"  2. Set BRIGHTDATA_API_KEY environment variable\n" +
 			"Get a key at https://brightdata.com/cp/setting/users",
 		);
