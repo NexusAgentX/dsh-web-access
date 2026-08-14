@@ -1,0 +1,12 @@
+.github/
+test/
+*.tgz
+.env
+.env.*
+.DS_Store
+npm-debug.log*
+.idea/
+.vscode/
+coverage/
+.git/
+.gitignore

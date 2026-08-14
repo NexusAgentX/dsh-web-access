@@ -1,0 +1,65 @@
+{
+  "name": "dsh-web-access",
+  "version": "0.0.1",
+  "description": "Web access for DeepSeek Harness — multi-provider search/fetch on ctx.web, plus GitHub/PDF/YouTube extraction.",
+  "type": "module",
+  "main": "./index.js",
+  "types": "./index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "import": "./index.js",
+      "default": "./index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "dsh-web-access": "./cli.js"
+  },
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "cli.js",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "prepack": "node --test test/*.test.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "web-search",
+    "web-fetch",
+    "exa",
+    "brave",
+    "searxng",
+    "ai",
+    "coding-agent"
+  ],
+  "license": "MIT",
+  "author": "NexusAgentX",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/NexusAgentX/dsh-web-access.git"
+  },
+  "bugs": {
+    "url": "https://github.com/NexusAgentX/dsh-web-access/issues"
+  },
+  "homepage": "https://github.com/NexusAgentX/dsh-web-access#readme",
+  "publishConfig": {
+    "access": "public"
+  }
+}

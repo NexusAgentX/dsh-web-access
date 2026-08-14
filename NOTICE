@@ -1,0 +1,14 @@
+dsh-web-access
+Copyright (c) 2026 NexusAgentX
+
+This project is an independent DeepSeek Harness plugin. It is not affiliated
+with DeepSeek AI.
+
+The product contract — multi-provider search fallback, URL extraction with
+GitHub/PDF/YouTube specialization, content cache, and source checking — is
+inspired by pi-web-access:
+
+  https://github.com/nicobailon/pi-web-access
+
+pi-web-access is MIT-licensed. See that repository for its copyright holders
+and license text.
