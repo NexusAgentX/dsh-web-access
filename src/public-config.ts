@@ -22,6 +22,13 @@ export function getPublicConfig(): Record<string, unknown> {
   return publicConfig
 }
 
+const listeners = new Set<(config: Record<string, unknown>) => void>()
+
+export function onPublicConfigChange(listener: (config: Record<string, unknown>) => void): () => void {
+  listeners.add(listener)
+  return () => listeners.delete(listener)
+}
+
 export function applyPublicConfig(updates: Record<string, unknown>): Record<string, unknown> {
   const next: Record<string, unknown> = {}
   for (const field of PUBLIC_FIELDS) {
@@ -42,7 +49,12 @@ export function applyPublicConfig(updates: Record<string, unknown>): Record<stri
   saveConfig(next)
   resetConfigCache()
   loadConfig()
-  return getPublicConfig()
+  const published = getPublicConfig()
+  for (const listener of listeners) {
+    try { listener(published) }
+    catch { /* a UI listener must not block config writes */ }
+  }
+  return published
 }
 
 function isConfigured(value: unknown): boolean {

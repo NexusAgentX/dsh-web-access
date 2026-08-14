@@ -4,7 +4,8 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-commands'
 import type {} from '@deepseek-ai/dsh-tools'
 import { createUserMessage } from '@deepseek-ai/dsh-llm/message'
-import { isCommandEnabled, isToolEnabled, loadConfigSafe } from './config.ts'
+import { isCommandEnabled, isToolEnabled, loadConfigSafe, resolveWorkflow } from './config.ts'
+import { onPublicConfigChange } from './public-config.ts'
 import { registerCommands } from './commands.ts'
 import {
   createEngine,
@@ -41,6 +42,12 @@ export function apply(ctx: Context, config: Config = {}): void {
   })
 
   ctx.effect(() => () => disposeEngine(), 'dsh-web-access.runtime')
+  ctx.effect(() => onPublicConfigChange(config => {
+    if (typeof config.workflow === 'string') {
+      engine.defaultWorkflow = resolveWorkflow(config.workflow, engine.defaultWorkflow)
+    }
+    void bindHarnessLlm(ctx, engine)
+  }), 'dsh-web-access.config')
   void bindHarnessLlm(ctx, engine)
   registerWebUi(ctx, engine)
 
