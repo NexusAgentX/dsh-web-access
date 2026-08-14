@@ -47,6 +47,10 @@ export const SUMMARY_GENERATION_DEADLINE_MS = 30_000
 
 let cached: WebSearchConfig | null = null
 
+export function resetConfigCache(): void {
+  cached = null
+}
+
 export function loadConfig(): WebSearchConfig {
   if (cached) return cached
   const path = getWebSearchConfigPath()

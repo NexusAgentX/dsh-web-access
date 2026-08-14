@@ -1,15 +1,14 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
 
+import { getSummaryGenerationDeadlineMs, resetConfigCache } from "../src/config.ts";
 import { findModelWithProviderRouting, loadEnabledModelPatterns, modelMatchesEnabledPatterns } from "../src/summary-model-scope.ts";
 import { generateSummaryDraft, SUMMARY_GENERATION_DEADLINE_MS } from "../src/summary-review.ts";
 
-const indexUrl = new URL("../src/index.ts", import.meta.url).href;
 const readmeSrc = readFileSync(new URL("../README.md", import.meta.url), "utf8");
 const summarySrc = readFileSync(new URL("../src/summary-review.ts", import.meta.url), "utf8");
 
@@ -237,20 +236,16 @@ test("summary generation has a hard deadline and preserves caller cancellation",
 
 async function summaryGenerationDeadline(config) {
 	const configDir = await mkdtemp(join(tmpdir(), "pi-web-access-summary-deadline-config-"));
+	const previous = process.env.PI_CODING_AGENT_DIR;
 	try {
 		if (config !== undefined) await writeFile(join(configDir, "web-search.json"), JSON.stringify(config));
-		const child = spawnSync(process.execPath, ["--input-type=module"], {
-			input: `
-				process.env.PI_CODING_AGENT_DIR = ${JSON.stringify(configDir)};
-				const { getSummaryGenerationDeadlineMs } = await import(${JSON.stringify(indexUrl)});
-				console.log(getSummaryGenerationDeadlineMs());
-			`,
-			encoding: "utf8",
-			env: { ...process.env, PI_CODING_AGENT_DIR: configDir },
-		});
-		assert.equal(child.status, 0, child.stderr);
-		return Number(child.stdout.trim());
+		process.env.PI_CODING_AGENT_DIR = configDir;
+		resetConfigCache();
+		return getSummaryGenerationDeadlineMs();
 	} finally {
+		if (previous === undefined) delete process.env.PI_CODING_AGENT_DIR;
+		else process.env.PI_CODING_AGENT_DIR = previous;
+		resetConfigCache();
 		await rm(configDir, { recursive: true, force: true });
 	}
 }
